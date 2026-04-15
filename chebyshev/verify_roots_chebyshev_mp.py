@@ -26,18 +26,14 @@ def verify_root(n, root, use_mpmath = False):
     val_np1 = T_np1(root)
     ratio = val_np1 / val_nm1
     expected = -1  # Always -1 for Chebyshev
-
     rel_error = abs(ratio - expected) / abs(expected)
-    tol = _theoretical_tolerance(n) if not use_mpmath else 1e-10
-    passed = rel_error < tol
 
     return {
-        "degree": n, "root": float(root),
-        "expected_ratio": -1.0,
+        "degree": n, "root": root,
+        "expected_ratio": float(expected),
         "computed_ratio": float(ratio),
         "relative_error": float(rel_error),
-        "tolerance": float(tol),  # Add this
-        "passed": passed
+        "passed": rel_error < 1e-10
     }
 
 def verify_roots(n, roots, use_mpmath = False):
@@ -52,23 +48,38 @@ def verify_roots(n, roots, use_mpmath = False):
         "expected_ratio": -1.0,
         "max_relative_error": float(max(errors)) if errors else None,
         "mean_relative_error": float(np.mean(errors)) if errors else None,
-        "tolerance": _theoretical_tolerance(n),  # Add this
         "per_root": results
     }
 
 
-def _theoretical_tolerance(n):
-    """Theory-based tolerance: O(n² * ε) with safety factor."""
-    return np.finfo(float).eps * n**2 * 1000
-
-
 if __name__ == "__main__":
     from numpy.polynomial.chebyshev import chebgauss
-    n = 101
-    roots, _ = chebgauss(n)
-    print(f"Verifying {n} Chebyshev roots...")
-    result = verify_roots(n, roots)
-    print(f"Tolerance (theoretical): {result['tolerance']:.2e}")
+
+    n = 111
+    if n > 120:
+        import mpmath
+        mpmath.mp.dps = 200  # 50 decimal places
+        use_mpmath = True
+        roots_mp = [mpmath.cos(mpmath.mpf(2*k - 1) * mpmath.pi / (2*n)) for k in range(1, n+1)]
+        print(f"Verifying {n} Chebyshev roots...")
+        _cache.clear()
+        # roots_mp = [mpmath.mpf(str(r)) for r in roots_mp]  # High-precision conversion
+        result = verify_roots(n, roots_mp, use_mpmath=True)
+        print(f"use_mpmath={use_mpmath}, mpmath precision={mpmath.mp.dps}")
+    else:
+        use_mpmath = False
+        roots, _ = chebgauss(n)
+        print(f"Verifying {n} Chebyshev roots...")
+        # _cache.clear()
+        result = verify_roots(n, roots, use_mpmath=True)
+
     print(f"Expected ratio: {result['expected_ratio']}")
     print(f"Passed: {result['passed']}/{result['num_roots']}")
     print(f"Max rel error: {result['max_relative_error']:.2e}")
+
+    # Show failed roots
+    failed = [r for r in result["per_root"] if not r.get("passed", True)]
+    if failed:
+        print(f"\nFailed roots ({len(failed)}):")
+        for f in sorted(failed, key=lambda x: -x["relative_error"]):
+            print(f"  root={f['root']:.10f}, ratio={f['computed_ratio']:.15f}, rel_err={f['relative_error']:.2e}")
