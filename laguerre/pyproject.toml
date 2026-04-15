@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "laguerre-polynomials"
+version = "1.0.0"
+description = "A Python module for generating laguerre polynomials with SymPy, NumPy, and mpmath integration"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+keywords = ["laguerre", "polynomials", "mathematics", "numerical", "symbolic"]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0",
+    "sympy>=1.9",
+    "mpmath>=1.2.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "black", "flake8", "mypy"]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/laguerre-polynomials"
+Documentation = "https://github.com/yourusername/laguerre-polynomials/blob/main/USER_MANUAL.md"
+Repository = "https://github.com/yourusername/laguerre-polynomials.git"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["laguerre*"]
+exclude = ["tests", "test_*"]
