@@ -434,7 +434,7 @@ class QuadratureAnalyzer:
         avg_ratio = np.mean(all_ratios)
         # Use median for robustness against outliers from near-zero derivatives
         median_ratio = float(np.median(all_ratios))
-
+        
         # Classify based on derivative growth rate
         if avg_ratio < 1.5:
             return "bounded"
@@ -611,37 +611,37 @@ class QuadratureAnalyzer:
         if iv == "infinite":
             if decay in ("gaussian",):
                 return self._Rec(PolynomialFamily.HERMITE, "high",
-                    "Infinite domain with Gaussian-weighted integrand. Gauss-Hermite quadrature absorbs the e^{-x^2} weight, yielding machine-precision results with O(sqrt(desired_digits)) nodes.")
+                                 "Infinite domain with Gaussian-weighted integrand. Gauss-Hermite quadrature absorbs the e^{-x^2} weight, yielding machine-precision results with O(sqrt(desired_digits)) nodes.")
             elif decay in ("exponential",):
                 return self._Rec(PolynomialFamily.HERMITE, "medium",
-                    "Infinite domain with exponential decay. Gauss-Hermite can still be effective if the decay is fast enough; otherwise consider a variable transformation to a finite interval and use Legendre.")
+                                 "Infinite domain with exponential decay. Gauss-Hermite can still be effective if the decay is fast enough; otherwise consider a variable transformation to a finite interval and use Legendre.")
             else:
                 return self._Rec(PolynomialFamily.HERMITE, "low",
-                    "Infinite domain with unknown or slow decay. Gauss-Hermite may converge slowly; consider transforming the integral to a finite interval first.")
+                                 "Infinite domain with unknown or slow decay. Gauss-Hermite may converge slowly; consider transforming the integral to a finite interval first.")
 
         if iv == "semi_infinite":
             if decay in ("exponential",):
                 return self._Rec(PolynomialFamily.LAGUERRE, "high",
-                    "Semi-infinite domain with exponential decay. Gauss-Laguerre absorbs the e^{-x} weight, ideal for Laplace-type integrals.")
+                                 "Semi-infinite domain with exponential decay. Gauss-Laguerre absorbs the e^{-x} weight, ideal for Laplace-type integrals.")
             elif decay in ("algebraic",):
                 return self._Rec(PolynomialFamily.LAGUERRE, "medium",
-                    "Semi-infinite domain with algebraic decay. Gauss-Laguerre is usable but may need higher degree; consider variable substitution t = x/(1+x) to map [0, inf) -> [0, 1) and use Legendre.")
+                                 "Semi-infinite domain with algebraic decay. Gauss-Laguerre is usable but may need higher degree; consider variable substitution t = x/(1+x) to map [0, inf) -> [0, 1) and use Legendre.")
             else:
                 return self._Rec(PolynomialFamily.LAGUERRE, "medium",
-                    "Semi-infinite domain. Gauss-Laguerre is the default choice; for slow decay consider mapping to a finite interval.")
+                                 "Semi-infinite domain. Gauss-Laguerre is the default choice; for slow decay consider mapping to a finite interval.")
 
         if iv == "finite":
             if has_end_sg:
                 return self._Rec(PolynomialFamily.CHEBYSHEV, "high",
-                    "Endpoint singularity detected at " + str(analysis.singularities) + ". Chebyshev nodes cluster near endpoints, and Clenshaw-Curtis quadrature handles endpoint singularities much better than Gauss-Legendre.")
+                                 "Endpoint singularity detected at " + str(analysis.singularities) + ". Chebyshev nodes cluster near endpoints, and Clenshaw-Curtis quadrature handles endpoint singularities much better than Gauss-Legendre.")
             if has_int_sg:
                 return self._Rec(PolynomialFamily.LEGENDRE, "low",
-                    "Interior singularity detected at " + str(analysis.singularities) + ". Standard Gaussian quadrature will converge slowly. Consider splitting the integral at the singularity or applying a variable transformation to remove it.")
+                                 "Interior singularity detected at " + str(analysis.singularities) + ". Standard Gaussian quadrature will converge slowly. Consider splitting the integral at the singularity or applying a variable transformation to remove it.")
             if is_periodic:
                 return self._Rec(PolynomialFamily.CHEBYSHEV, "high",
-                    "Function appears periodic on [" + str(a) + ", " + str(b) + "] with period ~" + str(analysis.approximate_period) + ". Clenshaw-Curtis quadrature exploits periodicity via FFT and achieves spectral accuracy.")
+                                 "Function appears periodic on [" + str(a) + ", " + str(b) + "] with period ~" + str(analysis.approximate_period) + ". Clenshaw-Curtis quadrature exploits periodicity via FFT and achieves spectral accuracy.")
             return self._Rec(PolynomialFamily.LEGENDRE, "high",
-                "Smooth function on a finite interval with no singularities. Gauss-Legendre is the optimal choice: it integrates polynomials of degree up to 2n-1 exactly and converges exponentially for analytic integrands.")
+                             "Smooth function on a finite interval with no singularities. Gauss-Legendre is the optimal choice: it integrates polynomials of degree up to 2n-1 exactly and converges exponentially for analytic integrands.")
 
         return self._Rec(PolynomialFamily.LEGENDRE, "low", "Could not determine optimal family; defaulting to Gauss-Legendre.")
 
@@ -662,9 +662,21 @@ class QuadratureAnalyzer:
             "Gaussian quadrature with n nodes integrates exactly all polynomials of degree <= 2n-1. For non-polynomial integrands, the error decays as O(|f^{(2n)}(xi)|) for some xi in the interval.")
 
         # Smoothness-based criterion
-        if growth == "bounded":
-            criteria.append(
-                "Derivatives are bounded on the interval => f is very smooth (likely analytic). Exponential convergence is expected; n=16-32 usually suffices for double-precision accuracy.")
+        log_at_origin = any(s["kind"] == "log_zero" and abs(s["location"]) < 1e-10
+                            for s in analysis.singularities
+                            )
+        if log_at_origin and iv == "semi_infinite":
+            criteria.append("Log singularity at x=0 detected. Standard Gauss-Laguerre converges "
+                            "algebraically for log-singular integrands (O(n^{-1/2}) typically). "
+                            "For higher accuracy, consider Generalized Laguerre with alpha>0 to "
+                            "pre-condition the singularity, or split: integrate over [0,1] with "
+                            "a log-adapted rule and [1,inf) with Gauss-Laguerre separately."
+                            )
+        elif growth == "bounded":
+            criteria.append("Derivatives are bounded on the interval => f is very smooth (likely "
+                            "analytic). Exponential convergence is expected; n=16-32 usually "
+                            "suffices for double-precision accuracy."
+                            )
         elif growth == "polynomial":
             criteria.append(
                 "Derivatives grow polynomially (like k!) => f is C^infty but not analytic. Algebraic convergence O(n^{-p}) expected; use n=32-128 and monitor convergence by doubling n.")
@@ -677,8 +689,15 @@ class QuadratureAnalyzer:
 
         # Singularity-based criterion
         if has_sg:
-            criteria.append(
-                "Singularities present: " + str(analysis.singularities) + ". This degrades convergence from exponential to algebraic (O(n^{-alpha}) where alpha depends on the singularity strength). Use n=64-256 and prefer Chebyshev nodes which cluster near endpoints.")
+            # Suppress generic singularity message for log-at-origin on semi-infinite
+            # intervals — the more specific message above already covers this case
+            log_at_origin = any(
+                s["kind"] == "log_zero" and abs(s["location"]) < 1e-10
+                for s in analysis.singularities
+            )
+            if not (log_at_origin and iv == "semi_infinite"):
+                criteria.append(
+                    "Singularities present: " + str(analysis.singularities) + ". This degrades convergence from exponential to algebraic (O(n^{-alpha}) where alpha depends on the singularity strength). Use n=64-256 and prefer Chebyshev nodes which cluster near endpoints.")
 
         # Periodicity criterion
         if is_periodic:
@@ -857,16 +876,22 @@ class QuadratureAnalyzer:
                 message="Failed to convert expression to numpy callable: " + str(e),
             )
 
-
+        # BEGIN OP46
         try:
             if fam == PolynomialFamily.LEGENDRE:
                 value = self._integrate_legendre(func, analysis.interval_a, analysis.interval_b, n)
             elif fam == PolynomialFamily.CHEBYSHEV:
-                value = self._integrate_chebyshev(func, analysis.interval_a, analysis.interval_b, n)
+                '''
+                value = self._integrate_chebyshev(func, analysis.interval_a, analysis.interval_b, n,
+                                                  has_endpoint_singularity=analysis.has_endpoint_singularity)
+                '''
+                value = self._integrate_chebyshev(func, expr, variable,
+                                                  analysis.interval_a, analysis.interval_b, n,
+                                                  has_endpoint_singularity=analysis.has_endpoint_singularity)
             elif fam == PolynomialFamily.HERMITE:
-                value = self._integrate_hermite(func, n, use_mpmath)
+                value = self._integrate_hermite(expr, variable, n, use_mpmath)
             else:  # LAGUERRE
-                value = self._integrate_laguerre(func, n)
+                value = self._integrate_laguerre(expr, variable, n)
         except ImportError as e:
             return QuadratureResult(
                 value=float("nan"), family_used=fam, n_nodes=n,
@@ -879,6 +904,7 @@ class QuadratureAnalyzer:
                 converged=False, error_estimate=None,
                 message="Quadrature computation failed: " + str(e),
             )
+        # END OP46
 
         # Step 4: adaptive degree doubling for convergence check
         value_n = float(value)
@@ -890,21 +916,27 @@ class QuadratureAnalyzer:
             )
 
         n2 = min(n * 2, 200)  # cap at warning threshold
+
+        # BEGIN OP46
         try:
             if fam == PolynomialFamily.LEGENDRE:
                 value_2n = self._integrate_legendre(func, analysis.interval_a, analysis.interval_b, n2)
             elif fam == PolynomialFamily.CHEBYSHEV:
-                value_2n = self._integrate_chebyshev(func, analysis.interval_a, analysis.interval_b, n2)
+                value_2n = self._integrate_chebyshev(func, expr, variable,
+                                                     analysis.interval_a, analysis.interval_b, n2,
+                                                     has_endpoint_singularity=analysis.has_endpoint_singularity)
             elif fam == PolynomialFamily.HERMITE:
-                value_2n = self._integrate_hermite(func, n2, use_mpmath)
+                value_2n = self._integrate_hermite(expr, variable, n2, use_mpmath)
             else:
-                value_2n = self._integrate_laguerre(func, n2)
-        except Exception:
+                value_2n = self._integrate_laguerre(expr, variable, n2)
+        except Exception as e:
+            print(f"DEBUG n2 failed: {e}")
             return QuadratureResult(
                 value=value_n, family_used=fam, n_nodes=n,
                 converged=False, error_estimate=None,
                 message="Convergence check failed at n=" + str(n2),
             )
+        # END OP46
 
         value_2n = float(value_2n)
         if not math.isfinite(value_2n):
@@ -916,7 +948,9 @@ class QuadratureAnalyzer:
 
         err = abs(value_2n - value_n)
         rel_err = err / (abs(value_n) + 1e-30)
-        converged = rel_err < tol
+        # converged = rel_err < tol
+        converged = (err < tol) or (rel_err < tol)
+        print(f"DEBUG: n={n}, n2={n2}, err={err:.3e}, rel_err={rel_err:.3e}, tol={tol}")
         return QuadratureResult(
             value=value_2n if converged else value_n,
             family_used=fam,
@@ -951,42 +985,129 @@ class QuadratureAnalyzer:
             nodes=quad.nodes, weights=quad.weights,
         )
         return float(result)
-
+    '''
     def _integrate_chebyshev(self, func, a: float, b: float, n: int) -> float:
         """Integrate using Clenshaw-Curtis via OrthoPolyB_np_mp. Returns the integral value."""
         from chebyshev import clencurt_quadrature
         # Map [-1, 1] to [a, b]
         scale = (b - a) / 2.0
         shift = (b + a) / 2.0
+
         def mapped_func(x):
             return func(scale * x + shift)
         result = clencurt_quadrature(mapped_func, n)
         # Clenshaw-Curtis returns the integral over [-1,1], scale to [a,b]
-        # return float(result * scale)
-        return float(result)
-
+        return float(result * scale)
+    '''
+    '''
     def _integrate_hermite(self, func, n: int, use_mpmath: bool = False) -> float:
         """Integrate over (-inf, +inf) using Gauss-Hermite via OrthoPolyB_np_mp. Returns the integral value."""
         from hermite import GaussHermiteQuadrature
         quad = GaussHermiteQuadrature(n=n, use_mpmath=use_mpmath)
         result = quad.integrate(func)
         return float(result)
+    '''
 
+    # BEGIN OP46
+    '''
+    def _integrate_hermite(self, func, n, use_mpmath, expr, variable):
+        from hermite import GaussHermiteQuadrature
+        from sympy import exp, Symbol, lambdify
+        v = Symbol(variable)
+        # Strip the e^{-x^2} weight if present
+        weight = exp(-v**2)
+        stripped_expr = (expr / weight).simplify()
+        stripped_func = lambdify(v, stripped_expr, modules="numpy")
+        quad = GaussHermiteQuadrature(n=n, use_mpmath=use_mpmath)
+        return float(quad.integrate(stripped_func))
+    '''
+
+    '''
+    def _integrate_chebyshev(self, func, a, b, n, has_endpoint_singularity):
+        from chebyshev import clencurt_quadrature, ChebyshevQuadrature
+        scale = (b - a) / 2.0
+        shift = (b + a) / 2.0
+        if has_endpoint_singularity:
+            # Use Gauss-Chebyshev which absorbs the 1/sqrt(1-x^2) weight
+            q = ChebyshevQuadrature()
+            return float(q.gauss_chebyshev_quadrature(func, n=n))
+        else:
+            mapped = lambda x: func(scale * x + shift)
+            return float(clencurt_quadrature(mapped, n) * scale)
+    '''
+
+    def _integrate_chebyshev(self, func, expr, variable, a, b, n,
+                             has_endpoint_singularity=False):
+        from chebyshev import clencurt_quadrature, ChebyshevQuadrature
+        if has_endpoint_singularity:
+            from sympy import sqrt, Symbol, lambdify
+            v = Symbol(variable)
+            weight = 1 / sqrt(1 - v**2)
+            stripped = lambdify(v, (expr / weight).simplify(), modules="numpy")
+            q = ChebyshevQuadrature()
+            return float(q.gauss_chebyshev_quadrature(stripped, n=n))
+        else:
+            scale = (b - a) / 2.0
+            shift = (b + a) / 2.0
+            mapped = lambda x: func(scale * x + shift)
+            return float(clencurt_quadrature(mapped, n) * scale)
+
+    '''
+    def _integrate_hermite(self, expr, variable, n, use_mpmath):
+        from sympy import exp, Symbol, lambdify
+        v = Symbol(variable)
+        weight = exp(-v**2)
+        stripped = lambdify(v, (expr / weight).simplify(), modules="numpy")
+        from hermite import GaussHermiteQuadrature
+        return float(GaussHermiteQuadrature(n=n, use_mpmath=use_mpmath).integrate(stripped))
+    '''
+
+    def _integrate_hermite(self, expr, variable: str, n: int,
+                           use_mpmath: bool = False) -> float:
+        from sympy import exp, Symbol, lambdify
+        from hermite import GaussHermiteQuadrature
+        v = Symbol(variable)
+        weight = exp(-v**2)
+        stripped = lambdify(v, (expr / weight).simplify(), modules="numpy")
+
+        # Sanity check: if stripped function grows at large |x|, Hermite will diverge
+        test_vals = stripped(np.array([3.0, 5.0, 7.0]))
+        if np.any(np.abs(test_vals) > 1e6):
+            raise ValueError(
+                "Stripped integrand grows at large |x| — Gauss-Hermite will diverge. "
+                "Consider transforming to a finite interval and using Legendre."
+            )
+
+        quad = GaussHermiteQuadrature(n=n, use_mpmath=use_mpmath)
+        return float(quad.integrate(stripped))
+
+    def _integrate_laguerre(self, expr, variable, n):
+        from sympy import exp, Symbol, lambdify
+        v = Symbol(variable)
+        weight = exp(-v)
+        stripped = lambdify(v, (expr / weight).simplify(), modules="numpy")
+        from laguerre import gauss_quadrature_weights
+        nodes, weights = gauss_quadrature_weights(n)
+        return float(np.sum(weights * stripped(nodes)))
+    # END OP46
+    '''
     def _integrate_laguerre(self, func, n: int) -> float:
         """Integrate over [0, +inf) using Gauss-Laguerre via OrthoPolyB_np_mp. Returns the integral value."""
         from laguerre import gauss_quadrature_weights
         nodes, weights = gauss_quadrature_weights(n)
         result = np.sum(weights * func(nodes))
         return float(result)
-
+    '''
 
 # ---------------------------------------------------------------------------
 #  Demo / self-test
 # ---------------------------------------------------------------------------
 
+
 if __name__ == "__main__":
     analyzer = QuadratureAnalyzer()
 
+    '''
     examples = [
         ("exp(-x**2) * sin(x)", (-1, 1), "Smooth analytic function on [-1,1]"),
         ("1 / sqrt(1 - x**2)", (-1, 1), "Endpoint singularity at +/-1"),
@@ -995,6 +1116,11 @@ if __name__ == "__main__":
         ("cos(3*x)", (-float(pi), float(pi)), "Periodic function on [-pi, pi]"),
         ("x**2 * exp(-x)", (0, float("inf")), "Laguerre-type integral"),
         ("1 / (1 + x**4)", (-float("inf"), float("inf")), "Algebraic decay on infinite interval"),
+    ]
+    '''
+    examples = [
+        ("1 / sqrt(1 - x**2)", (-1, 1), "Endpoint singularity at +/-1"),
+        ("log(x) * exp(-x)", None, "Log singularity + exponential decay"),
     ]
 
     for expr_str, interval, desc in examples:
